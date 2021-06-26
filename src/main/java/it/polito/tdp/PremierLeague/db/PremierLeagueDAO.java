@@ -3,10 +3,14 @@ package it.polito.tdp.PremierLeague.db;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
 import it.polito.tdp.PremierLeague.model.Action;
+import it.polito.tdp.PremierLeague.model.Arco;
 import it.polito.tdp.PremierLeague.model.Match;
 import it.polito.tdp.PremierLeague.model.Player;
 
@@ -60,15 +64,17 @@ public class PremierLeagueDAO {
 		}
 	}
 	
-	public List<Match> listAllMatches(){
+	public List<Match> listAllMatches(Integer mese){
 		String sql = "SELECT m.MatchID, m.TeamHomeID, m.TeamAwayID, m.teamHomeFormation, m.teamAwayFormation, m.resultOfTeamHome, m.date, t1.Name, t2.Name   "
-				+ "FROM Matches m, Teams t1, Teams t2 "
-				+ "WHERE m.TeamHomeID = t1.TeamID AND m.TeamAwayID = t2.TeamID";
+				+ " FROM Matches m, Teams t1, Teams t2 "
+				+ " WHERE m.TeamHomeID = t1.TeamID AND m.TeamAwayID = t2.TeamID"
+				+ " AND MONTH(m.date) = ?";
 		List<Match> result = new ArrayList<Match>();
 		Connection conn = DBConnect.getConnection();
 
 		try {
 			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, mese);
 			ResultSet res = st.executeQuery();
 			while (res.next()) {
 
@@ -87,6 +93,73 @@ public class PremierLeagueDAO {
 			e.printStackTrace();
 			return null;
 		}
+	}
+	
+	public List <Arco> listArchi (Integer mese, Integer minuti, Map<Integer, Match> idMap) {
+		String sql= "SELECT m1.MatchID, m2.MatchID"
+				+ " FROM matches AS m1, matches m2,  actions AS a1 , actions AS a2"
+				+ " WHERE MONTH(m1.Date)=? AND MONTH(m2.Date)=? AND a1.MatchID=m1.MatchID "
+				+ " AND a1.TimePlayed > ? AND a2.TimePlayed>? AND a2.MatchID=m2.MatchID "
+				+ " AND m1.MatchID!=m2.MatchID AND m1.MatchID > m2.MatchID "
+				+ " AND a1.PlayerID=a2.PlayerID"
+				+ " GROUP BY m1.MatchID, m2.MatchID";
+		
+		List<Arco> result = new ArrayList<>();
+		Connection conn = DBConnect.getConnection();
+
+		try {
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, mese);
+			st.setInt(2, mese);
+			st.setInt(3, minuti);
+			st.setInt(4, minuti);
+			ResultSet res = st.executeQuery();
+			while (res.next()) {
+
+				Arco arco = new Arco(idMap.get(res.getInt("m1.MatchID")), idMap.get(res.getInt("m2.MatchID")), getPeso(minuti, res.getInt("m1.MatchID"), res.getInt("m2.MatchID")));
+				result.add(arco);
+			}
+			conn.close();
+			return result;
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return null;
+		}
+
+	}
+	
+	public Double getPeso(Integer minuti, Integer id1, Integer id2) {
+		String sql = "SELECT a1.MatchID, a1.PlayerID, a2.MatchID, a2.PlayerID "
+				+ "FROM matches AS m1, actions AS a1, matches AS m2, actions AS a2 "
+				+ "WHERE m1.MatchID= ? AND m2.MatchID = ? AND m1.MatchID=a1.MatchID AND m2.MatchID=a2.MatchID "
+				+ "AND a2.TimePlayed >= ? AND a1.TimePlayed >= ?  "
+				+ "AND a1.PlayerID = a2.PlayerID "
+				+ "GROUP BY a2.PlayerID, a1.PlayerID";
+		
+		Double result = 0.0;
+		Connection conn = DBConnect.getConnection();
+
+		try {
+			PreparedStatement st = conn.prepareStatement(sql);
+			st.setInt(1, id1);
+			st.setInt(2, id2);
+			st.setInt(3, minuti);
+			st.setInt(4, minuti);
+			ResultSet res = st.executeQuery();
+			while (res.next()) {
+
+				result ++;
+				
+			}
+			conn.close();
+			return result;
+			
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return null;
+		}
+		
 	}
 	
 }
